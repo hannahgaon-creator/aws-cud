@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>AWS RI/SP 成本分析图表</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif; background: #fff8f0; }
+  .page { width: 1200px; margin: 0 auto; padding: 40px 0; }
+
+  .chart-section {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    margin-bottom: 60px;
+    box-shadow: 0 8px 40px rgba(255,153,0,0.12);
+  }
+  .chart-title { font-size: 22px; font-weight: bold; color: #1a1a2e; margin-bottom: 6px; }
+  .chart-subtitle { font-size: 14px; color: #888; margin-bottom: 30px; }
+  .chart-wrap { height: 420px; position: relative; }
+
+  .kpi-row { display: flex; gap: 20px; margin-bottom: 60px; }
+  .kpi-card {
+    flex: 1; border-radius: 16px; padding: 28px 20px; text-align: center; color: white;
+    background: linear-gradient(135deg, #ff9900, #c45900);
+  }
+  .kpi-card.dark { background: linear-gradient(135deg, #232f3e, #1a4a6e); }
+  .kpi-card.green { background: linear-gradient(135deg, #1a9e5c, #0d6b3a); }
+  .kpi-card.purple { background: linear-gradient(135deg, #7c4dff, #4527a0); }
+  .kpi-card.red { background: linear-gradient(135deg, #d13212, #8b1a00); }
+  .kpi-label { font-size: 13px; opacity: 0.88; margin-bottom: 10px; }
+  .kpi-value { font-size: 32px; font-weight: bold; }
+  .kpi-sub { font-size: 12px; opacity: 0.75; margin-top: 6px; }
+
+  .source { text-align: center; color: #bbb; font-size: 12px; padding: 20px 0 40px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- KPI 卡片 -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">月度 SP 节省</div>
+      <div class="kpi-value">$10,774</div>
+      <div class="kpi-sub">Savings Plans</div>
+    </div>
+    <div class="kpi-card dark">
+      <div class="kpi-label">月度 RI 节省</div>
+      <div class="kpi-value">$101</div>
+      <div class="kpi-sub">Reserved Instances</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">AWS 月度总节省</div>
+      <div class="kpi-value">$10,874</div>
+      <div class="kpi-sub">2026年5月</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">SP 覆盖率（7天）</div>
+      <div class="kpi-value">97.4%</div>
+      <div class="kpi-sub">计算资源层</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">RI 覆盖率（RDS）</div>
+      <div class="kpi-value">61.9%</div>
+      <div class="kpi-sub">数据库层待优化</div>
+    </div>
+  </div>
+
+  <!-- 图1：SP vs RI 节省对比 -->
+  <div class="chart-section">
+    <div class="chart-title">📊 AWS 月度节省构成：SP vs RI</div>
+    <div class="chart-subtitle">2026年5月 Savings Plans 与 Reserved Instances 节省金额对比，USD</div>
+    <div class="chart-wrap">
+      <canvas id="c1"></canvas>
+    </div>
+  </div>
+
+  <!-- 图2：覆盖率对比 -->
+  <div class="chart-section">
+    <div class="chart-title">🎯 SP 与 RI 覆盖率对比（近7天，截至 2026-05-27）</div>
+    <div class="chart-subtitle">SP 覆盖计算资源层（97.4%），RI 覆盖数据库与缓存层（仍有优化空间）</div>
+    <div class="chart-wrap">
+      <canvas id="c2"></canvas>
+    </div>
+  </div>
+
+  <!-- 图3：各服务引擎覆盖率 -->
+  <div class="chart-section">
+    <div class="chart-title">🔍 RI 覆盖率详情（按服务 × 引擎，N-2 = 2026-05-27）</div>
+    <div class="chart-subtitle">红色 = 0% 覆盖，是最优先的 RI 购买机会；绿色 = 已充分覆盖</div>
+    <div class="chart-wrap">
+      <canvas id="c3"></canvas>
+    </div>
+  </div>
+
+  <!-- 图4：预留 vs 按需小时数 -->
+  <div class="chart-section">
+    <div class="chart-title">🗄️ RDS / ElastiCache 预留 vs 按需小时数（N-2 单日）</div>
+    <div class="chart-subtitle">红色（按需）越多 = 未覆盖浪费越多，是购买 RI 的直接依据</div>
+    <div class="chart-wrap">
+      <canvas id="c4"></canvas>
+    </div>
+  </div>
+
+  <!-- 图5：AI 购买建议月节省 -->
+  <div class="chart-section">
+    <div class="chart-title">💡 AI 购买建议：执行后预计额外月节省</div>
+    <div class="chart-subtitle">基于 N-2 真实数据，执行全部建议后可额外节省 $306.47/月</div>
+    <div class="chart-wrap">
+      <canvas id="c5"></canvas>
+    </div>
+  </div>
+
+  <!-- 图6：SP 已覆盖 vs OnDemand -->
+  <div class="chart-section">
+    <div class="chart-title">📈 Savings Plans 覆盖情况（近7天）</div>
+    <div class="chart-subtitle">SP 已覆盖 $6,658.05，OnDemand 剩余 $180.73，覆盖率 97.4%</div>
+    <div class="chart-wrap">
+      <canvas id="c6"></canvas>
+    </div>
+  </div>
+
+  <div class="source">数据来源：esaving MCP API · AWS Cost Explorer + CUR DuckDB | 数据周期：2026-05（N-2 = 2026-05-27）</div>
+</div>
+
+<script>
+Chart.defaults.font.size = 14;
+Chart.defaults.font.family = '"Microsoft YaHei", "PingFang SC", Arial, sans-serif';
+
+const orange = '#ff9900';
+const dark = '#232f3e';
+const green = '#1a9e5c';
+const red = '#d13212';
+const purple = '#7c4dff';
+const yellow = '#f9ab00';
+
+// 图1：SP vs RI
+new Chart(document.getElementById('c1'), {
+  type: 'bar',
+  data: {
+    labels: ['Savings Plans（SP）', 'Reserved Instances（RI）'],
+    datasets: [{
+      label: '月节省金额（USD）',
+      data: [10773.73, 100.73],
+      backgroundColor: [orange, dark],
+      borderRadius: 10, borderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: c => ` 节省: $${c.raw.toLocaleString()}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'K', font: { size: 13 } } },
+      x: { ticks: { font: { size: 15, weight: 'bold' } } }
+    }
+  }
+});
+
+// 图2：覆盖率对比
+new Chart(document.getElementById('c2'), {
+  type: 'bar',
+  data: {
+    labels: ['SP 覆盖率（计算层）', 'RDS RI 覆盖率（数据库）', 'ElastiCache RI 覆盖率（缓存）'],
+    datasets: [
+      {
+        label: '当前覆盖率 %',
+        data: [97.4, 61.9, 87.6],
+        backgroundColor: [green, orange, dark],
+        borderRadius: 10, borderWidth: 0,
+      },
+      {
+        label: '目标 100%',
+        data: [100, 100, 100],
+        backgroundColor: 'rgba(0,0,0,0.05)',
+        borderRadius: 10, borderWidth: 0,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 14 }, padding: 20 } },
+      tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}%` } }
+    },
+    scales: {
+      y: { beginAtZero: true, max: 110, ticks: { callback: v => v + '%', font: { size: 13 } } }
+    }
+  }
+});
+
+// 图3：各引擎覆盖率
+new Chart(document.getElementById('c3'), {
+  type: 'bar',
+  data: {
+    labels: ['Aurora\nPostgreSQL', 'RDS\nMySQL', 'Aurora\nMySQL', 'RDS\nOracle', 'ElastiCache\nRedis', 'ElastiCache\nValkey'],
+    datasets: [{
+      label: '覆盖率 %',
+      data: [0, 0, 82.91, 100, 42.86, 100],
+      backgroundColor: [red, red, orange, green, orange, green],
+      borderRadius: 8, borderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: c => ` 覆盖率: ${c.raw}%` } }
+    },
+    scales: {
+      y: { beginAtZero: true, max: 110, ticks: { callback: v => v + '%', font: { size: 13 } } },
+      x: { ticks: { font: { size: 13 } } }
+    }
+  }
+});
+
+// 图4：预留 vs 按需小时
+new Chart(document.getElementById('c4'), {
+  type: 'bar',
+  data: {
+    labels: ['Aurora\nPostgreSQL', 'RDS\nMySQL', 'Aurora\nMySQL', 'RDS\nOracle', 'ElastiCache\nRedis', 'ElastiCache\nValkey'],
+    datasets: [
+      {
+        label: '预留小时（已覆盖）',
+        data: [0, 0, 179.08, 72, 72, 552],
+        backgroundColor: green,
+        borderRadius: 6, borderWidth: 0,
+      },
+      {
+        label: '按需小时（未覆盖）',
+        data: [24, 96, 36.92, 0, 96, 0],
+        backgroundColor: red,
+        borderRadius: 6, borderWidth: 0,
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 14 }, padding: 20 } },
+      tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.raw}h` } }
+    },
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: v => v + 'h', font: { size: 13 } } }
+    }
+  }
+});
+
+// 图5：AI 购买建议
+new Chart(document.getElementById('c5'), {
+  type: 'bar',
+  data: {
+    labels: ['RDS RI\n（14实例）', 'ElastiCache RI\n（4实例）', 'Compute SP\n（$0.307/h，3年）'],
+    datasets: [{
+      label: '预计额外月节省（USD）',
+      data: [151.95, 24.61, 129.91],
+      backgroundColor: [dark, purple, orange],
+      borderRadius: 10, borderWidth: 0,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: c => ` 月节省: $${c.raw}` } }
+    },
+    scales: {
+      y: { beginAtZero: true, ticks: { callback: v => '$' + v, font: { size: 13 } } },
+      x: { ticks: { font: { size: 13 } } }
+    }
+  }
+});
+
+// 图6：SP 覆盖 vs OnDemand（饼图）
+new Chart(document.getElementById('c6'), {
+  type: 'doughnut',
+  data: {
+    labels: ['SP 已覆盖 97.4%  $6,658', 'OnDemand 未覆盖 2.6%  $181'],
+    datasets: [{
+      data: [6658.05, 180.73],
+      backgroundColor: [orange, red],
+      borderWidth: 4, borderColor: '#fff', hoverOffset: 12,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 15 }, padding: 24 } },
+      tooltip: { callbacks: { label: c => ` ${c.label}: $${c.raw.toLocaleString()}` } }
+    },
+    cutout: '58%',
+  }
+});
+</script>
+</body>
+</html>
